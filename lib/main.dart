@@ -162,8 +162,8 @@ class _DashboardViewState extends State<DashboardView> {
       appBar: AppBar(
         title: Row(
           children: [
-            Image.network(
-              'https://cdn-icons-png.flaticon.com/512/1892/1892972.png', // Durian vector icon
+            Image.asset(
+              'assets/durian_tree.jpg', // Durian tree icon
               width: 32,
               height: 32,
               errorBuilder: (context, error, stackTrace) =>
