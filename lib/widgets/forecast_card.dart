@@ -39,9 +39,11 @@ class _ForecastCardState extends State<ForecastCard> {
   // Load locations from assets/thailand_locations.json
   Future<void> _loadLocations() async {
     try {
-      final String response = await rootBundle.loadString('assets/thailand_locations.json');
+      final String response = await rootBundle.loadString(
+        'assets/thailand_locations.json',
+      );
       final data = jsonDecode(response) as List<dynamic>;
-      
+
       final prefs = await SharedPreferences.getInstance();
       final savedProvince = prefs.getString('selected_province');
       final savedDistrict = prefs.getString('selected_district');
@@ -50,10 +52,10 @@ class _ForecastCardState extends State<ForecastCard> {
       setState(() {
         _locations = data;
         _provinces = data.map((item) => item['name_th'].toString()).toList();
-        
+
         if (savedProvince != null && _provinces.contains(savedProvince)) {
           _selectedProvince = savedProvince;
-          
+
           // Update districts list
           final provinceData = _locations.firstWhere(
             (item) => item['name_th'] == _selectedProvince,
@@ -61,21 +63,27 @@ class _ForecastCardState extends State<ForecastCard> {
           );
           if (provinceData != null) {
             final List<dynamic> districtList = provinceData['districts'] ?? [];
-            _districts = districtList.map((item) => item['name_th'].toString()).toList();
-            
+            _districts = districtList
+                .map((item) => item['name_th'].toString())
+                .toList();
+
             if (savedDistrict != null && _districts.contains(savedDistrict)) {
               _selectedDistrict = savedDistrict;
-              
+
               // Update subdistricts list
               final districtData = districtList.firstWhere(
                 (item) => item['name_th'] == _selectedDistrict,
                 orElse: () => null,
               );
               if (districtData != null) {
-                final List<dynamic> subList = districtData['sub_districts'] ?? [];
-                _subdistricts = subList.map((item) => item['name_th'].toString()).toList();
-                
-                if (savedSubdistrict != null && _subdistricts.contains(savedSubdistrict)) {
+                final List<dynamic> subList =
+                    districtData['sub_districts'] ?? [];
+                _subdistricts = subList
+                    .map((item) => item['name_th'].toString())
+                    .toList();
+
+                if (savedSubdistrict != null &&
+                    _subdistricts.contains(savedSubdistrict)) {
                   _selectedSubdistrict = savedSubdistrict;
                 }
               }
@@ -117,7 +125,7 @@ class _ForecastCardState extends State<ForecastCard> {
 
   void _updateDistricts() {
     if (_selectedProvince == null) return;
-    
+
     final provinceData = _locations.firstWhere(
       (item) => item['name_th'] == _selectedProvince,
       orElse: () => null,
@@ -126,7 +134,9 @@ class _ForecastCardState extends State<ForecastCard> {
     setState(() {
       if (provinceData != null) {
         final List<dynamic> districtList = provinceData['districts'] ?? [];
-        _districts = districtList.map((item) => item['name_th'].toString()).toList();
+        _districts = districtList
+            .map((item) => item['name_th'].toString())
+            .toList();
       } else {
         _districts = [];
       }
@@ -155,7 +165,9 @@ class _ForecastCardState extends State<ForecastCard> {
     setState(() {
       if (districtData != null) {
         final List<dynamic> subList = districtData['sub_districts'] ?? [];
-        _subdistricts = subList.map((item) => item['name_th'].toString()).toList();
+        _subdistricts = subList
+            .map((item) => item['name_th'].toString())
+            .toList();
       } else {
         _subdistricts = [];
       }
@@ -176,7 +188,9 @@ class _ForecastCardState extends State<ForecastCard> {
         (item) => item['name_th'] == _selectedProvince,
         orElse: () => null,
       );
-      final String? provinceEn = provinceData != null ? provinceData['name_en']?.toString() : null;
+      final String? provinceEn = provinceData != null
+          ? provinceData['name_en']?.toString()
+          : null;
 
       String? districtEn;
       String? subdistrictEn;
@@ -187,7 +201,9 @@ class _ForecastCardState extends State<ForecastCard> {
           (item) => item['name_th'] == _selectedDistrict,
           orElse: () => null,
         );
-        districtEn = districtData != null ? districtData['name_en']?.toString() : null;
+        districtEn = districtData != null
+            ? districtData['name_en']?.toString()
+            : null;
 
         if (_selectedSubdistrict != null && districtData != null) {
           final List<dynamic> subList = districtData['sub_districts'] ?? [];
@@ -195,7 +211,9 @@ class _ForecastCardState extends State<ForecastCard> {
             (item) => item['name_th'] == _selectedSubdistrict,
             orElse: () => null,
           );
-          subdistrictEn = subData != null ? subData['name_en']?.toString() : null;
+          subdistrictEn = subData != null
+              ? subData['name_en']?.toString()
+              : null;
         }
       }
 
@@ -271,7 +289,11 @@ class _ForecastCardState extends State<ForecastCard> {
           children: [
             Row(
               children: [
-                Icon(Icons.calendar_month_outlined, color: theme.colorScheme.primary, size: 20),
+                Icon(
+                  Icons.calendar_month_outlined,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'พยากรณ์อากาศล่วงหน้า ${_forecast.length} วัน',
@@ -283,7 +305,7 @@ class _ForecastCardState extends State<ForecastCard> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Cascading Dropdowns Wrapper
             LayoutBuilder(
               builder: (context, constraints) {
@@ -351,9 +373,9 @@ class _ForecastCardState extends State<ForecastCard> {
                 );
               },
             ),
-            
+
             const SizedBox(height: 18),
-            
+
             // Forecast List View
             _isLoading
                 ? const SizedBox(
@@ -361,88 +383,148 @@ class _ForecastCardState extends State<ForecastCard> {
                     child: Center(child: CircularProgressIndicator()),
                   )
                 : _forecast.isEmpty
-                    ? const SizedBox(
-                        height: 150,
-                        child: Center(child: Text('ไม่พบข้อมูลพยากรณ์อากาศ')),
-                      )
-                    : SizedBox(
-                        height: 160,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          physics: const BouncingScrollPhysics(),
-                          itemCount: _forecast.length,
-                          itemBuilder: (context, index) {
-                            final day = _forecast[index];
-                            final weatherColor = _getWeatherColor(day.condition);
-                            final isToday = index == 0;
-                            final dayLabel = isToday
-                                ? 'วันนี้'
-                                : DateFormat('EEE d', 'th_TH').format(day.date);
+                ? const SizedBox(
+                    height: 150,
+                    child: Center(child: Text('ไม่พบข้อมูลพยากรณ์อากาศ')),
+                  )
+                : SizedBox(
+                    height: 200,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: _forecast.length,
+                      itemBuilder: (context, index) {
+                        final day = _forecast[index];
+                        final weatherColor = _getWeatherColor(day.condition);
+                        final isToday = index == 0;
+                        final dayLabel = isToday
+                            ? 'วันนี้'
+                            : DateFormat('EEE d', 'th_TH').format(day.date);
 
-                            return Container(
-                              width: 100,
-                              margin: const EdgeInsets.only(right: 12, top: 4, bottom: 4),
-                              decoration: BoxDecoration(
-                                color: isToday
-                                    ? theme.colorScheme.primary.withOpacity(0.08)
-                                    : isDark ? Colors.grey[850] : Colors.grey[50],
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
+                        return Container(
+                          width: 112,
+                          margin: const EdgeInsets.only(
+                            right: 12,
+                            top: 4,
+                            bottom: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isToday
+                                ? theme.colorScheme.primary.withOpacity(0.08)
+                                : isDark
+                                ? Colors.grey[850]
+                                : Colors.grey[50],
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isToday
+                                  ? theme.colorScheme.primary.withOpacity(0.3)
+                                  : isDark
+                                  ? Colors.grey[800]!
+                                  : Colors.grey[200]!,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                dayLabel,
+                                style: TextStyle(
+                                  fontWeight: isToday
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
                                   color: isToday
-                                      ? theme.colorScheme.primary.withOpacity(0.3)
-                                      : isDark ? Colors.grey[800]! : Colors.grey[200]!,
-                                  width: 1.5,
+                                      ? theme.colorScheme.primary
+                                      : isDark
+                                      ? Colors.grey[300]
+                                      : Colors.grey[700],
+                                  fontSize: 12,
                                 ),
                               ),
-                              child: Column(
+                              const SizedBox(height: 10),
+                              Icon(
+                                _getWeatherIcon(day.condition),
+                                color: weatherColor,
+                                size: 28,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '${day.tempMax}° / ${day.tempMin}°',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(
-                                    dayLabel,
-                                    style: TextStyle(
-                                      fontWeight: isToday ? FontWeight.w800 : FontWeight.w600,
-                                      color: isToday
-                                          ? theme.colorScheme.primary
-                                          : isDark ? Colors.grey[300] : Colors.grey[700],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
                                   Icon(
-                                    _getWeatherIcon(day.condition),
-                                    color: weatherColor,
-                                    size: 28,
+                                    Icons.water_drop,
+                                    size: 10,
+                                    color: Colors.blue[300],
                                   ),
-                                  const SizedBox(height: 8),
                                   Text(
-                                    '${day.tempMax}° / ${day.tempMin}°',
+                                    ' ${day.rainChance}%',
                                     style: TextStyle(
+                                      fontSize: 10,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      color: isDark ? Colors.white : Colors.black87,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
                                     ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.water_drop, size: 10, color: Colors.blue[300]),
-                                      Text(
-                                        ' ${day.rainChance}%',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
                                   ),
                                 ],
                               ),
-                            );
-                          },
-                        ),
-                      ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.air,
+                                    size: 10,
+                                    color: Colors.teal[300],
+                                  ),
+                                  Text(
+                                    ' ${day.windSpeed.toStringAsFixed(1)} km/h',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.opacity,
+                                    size: 10,
+                                    color: Colors.lightBlue[300],
+                                  ),
+                                  Text(
+                                    ' ${day.humidity.toStringAsFixed(0)}%',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark
+                                          ? Colors.grey[400]
+                                          : Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
           ],
         ),
       ),
@@ -480,7 +562,10 @@ class _ForecastCardState extends State<ForecastCard> {
               value: val,
               child: Text(
                 val,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             );
