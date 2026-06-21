@@ -54,10 +54,12 @@ class WeatherForecastDay {
 class WeatherService {
   WeatherService._privateConstructor();
   static final WeatherService instance = WeatherService._privateConstructor();
+  String _lastForecastSource = 'Unknown';
 
-  // Fetches daily forecast. Queries OpenWeatherMap if key exists, otherwise falls back to Open-Meteo, and then simulation.
-  // Fetches daily forecast. Queries OpenWeatherMap if key exists, otherwise falls back to Open-Meteo, and then simulation.
-  // Performs a cascading search from specific to general: Subdistrict -> District -> Province.
+  String get lastForecastSource => _lastForecastSource;
+
+  // Fetches daily forecast from TMD first, then falls back to OpenWeatherMap,
+  // Open-Meteo, and finally local simulation.
   Future<List<WeatherForecastDay>> get7DayForecast({
     required String province,
     String? district,
@@ -66,11 +68,55 @@ class WeatherService {
     String? districtEn,
     String? subdistrictEn,
   }) async {
+    final String tmdToken = dotenv.get('TMD_API_TOKEN', fallback: '').trim();
     final String apiKey = dotenv
         .get('OPENWEATHERMAP_API_KEY', fallback: '')
         .trim();
+    final String requestLocation = _buildLocationLabel(
+      province: province,
+      district: district,
+      subdistrict: subdistrict,
+    );
 
-    // Build the query fallback order (Subdistrict -> District -> Province -> Thai Name)
+    // Build the Thai fallback order for TMD place queries.
+    final List<Map<String, String>> tmdPlaceFallbacks = [];
+    if (subdistrict != null &&
+        subdistrict.isNotEmpty &&
+        district != null &&
+        district.isNotEmpty) {
+      tmdPlaceFallbacks.add({
+        'province': province,
+        'amphoe': district,
+        'tambon': subdistrict,
+      });
+    }
+    if (district != null && district.isNotEmpty) {
+      tmdPlaceFallbacks.add({'province': province, 'amphoe': district});
+    }
+    tmdPlaceFallbacks.add({'province': province});
+
+    if (tmdToken.isNotEmpty) {
+      print(
+        '[Forecast] source=TMD status=trying location=$requestLocation fallbacks=$tmdPlaceFallbacks',
+      );
+      final tmdForecast = await _fetchTmdForecast(
+        token: tmdToken,
+        placeFallbacks: tmdPlaceFallbacks,
+      );
+      if (tmdForecast != null && tmdForecast.isNotEmpty) {
+        _lastForecastSource = 'TMD';
+        print(
+          '[Forecast] source=TMD status=selected location=$requestLocation days=${tmdForecast.length}',
+        );
+        return tmdForecast;
+      }
+    } else {
+      print(
+        '[Forecast] source=TMD status=skipped reason=missing-token location=$requestLocation',
+      );
+    }
+
+    // Build the English fallback order for non-TMD providers.
     final List<String> queryFallbacks = [];
     if (subdistrictEn != null &&
         subdistrictEn.isNotEmpty &&
@@ -91,7 +137,9 @@ class WeatherService {
     }
     queryFallbacks.add(province); // Fallback to Thai province name
 
-    print('Fetching weather forecast with fallbacks: $queryFallbacks');
+    print(
+      '[Forecast] source=fallback status=trying location=$requestLocation queries=$queryFallbacks',
+    );
 
     if (apiKey.isNotEmpty) {
       for (final targetLocation in queryFallbacks) {
@@ -179,37 +227,142 @@ class WeatherService {
               }
 
               if (forecastDays.isNotEmpty) {
+                _lastForecastSource = 'OpenWeatherMap';
                 print(
-                  'Successfully fetched OpenWeatherMap forecast for: $targetLocation',
+                  '[Forecast] source=OpenWeatherMap status=selected location=$targetLocation days=${forecastDays.length}',
                 );
                 return forecastDays;
               }
             }
           } else {
             print(
-              'OpenWeatherMap API returned ${response.statusCode} for "$targetLocation". Trying next fallback...',
+              '[Forecast] source=OpenWeatherMap status=miss location=$targetLocation code=${response.statusCode}',
             );
           }
         } catch (e) {
           print(
-            'Error fetching OpenWeatherMap forecast for "$targetLocation": $e. Trying next...',
+            '[Forecast] source=OpenWeatherMap status=error location=$targetLocation error=$e',
           );
         }
       }
     } else {
-      print('OpenWeatherMap API Key is empty.');
+      print(
+        '[Forecast] source=OpenWeatherMap status=skipped reason=missing-api-key location=$requestLocation',
+      );
     }
 
     // Fall back to Open-Meteo API
-    print('Falling back to Open-Meteo API...');
+    print(
+      '[Forecast] source=Open-Meteo status=trying location=$requestLocation',
+    );
     final openMeteoForecast = await _fetchOpenMeteoForecast(queryFallbacks);
     if (openMeteoForecast != null && openMeteoForecast.isNotEmpty) {
+      _lastForecastSource = 'Open-Meteo';
+      print(
+        '[Forecast] source=Open-Meteo status=selected location=$requestLocation days=${openMeteoForecast.length}',
+      );
       return openMeteoForecast;
     }
 
     // Direct fallback to simulation if both APIs fail or are unreachable
-    print('All APIs failed. Returning simulated forecast data.');
+    print(
+      '[Forecast] source=simulation status=selected location=$requestLocation reason=all-apis-failed',
+    );
+    _lastForecastSource = 'Simulation';
     return _generateSimulatedForecast(province, district, subdistrict);
+  }
+
+  Future<List<WeatherForecastDay>?> _fetchTmdForecast({
+    required String token,
+    required List<Map<String, String>> placeFallbacks,
+  }) async {
+    const String baseUrl =
+        'https://data.tmd.go.th/nwpapi/v1/forecast/location/daily/place';
+
+    for (final place in placeFallbacks) {
+      try {
+        final uri = Uri.parse(baseUrl).replace(
+          queryParameters: {
+            ...place,
+            'duration': '7',
+            'fields': 'tc_min,tc_max,rh,cond,ws10m,rain',
+          },
+        );
+
+        print('Trying TMD forecast for place: $place');
+        final response = await http
+            .get(
+              uri,
+              headers: {
+                'accept': 'application/json',
+                'authorization': 'Bearer $token',
+              },
+            )
+            .timeout(const Duration(seconds: 5));
+
+        if (response.statusCode != 200) {
+          print(
+            'TMD API returned ${response.statusCode} for $place. Trying next fallback...',
+          );
+          continue;
+        }
+
+        final Map<String, dynamic> decoded =
+            jsonDecode(response.body) as Map<String, dynamic>;
+        final List<dynamic> forecastLocations = _extractTmdForecastLocations(
+          decoded,
+        );
+
+        if (forecastLocations.isEmpty) {
+          print('TMD API returned no forecast locations for $place.');
+          continue;
+        }
+
+        final Map<String, dynamic> firstLocation =
+            forecastLocations.first as Map<String, dynamic>;
+        final List<dynamic> forecasts =
+            firstLocation['forecasts'] as List<dynamic>? ?? const [];
+        final List<WeatherForecastDay> parsedForecasts = [];
+
+        for (final entry in forecasts) {
+          final Map<String, dynamic> forecastEntry =
+              entry as Map<String, dynamic>;
+          final Map<String, dynamic> data =
+              forecastEntry['data'] as Map<String, dynamic>? ?? const {};
+          final DateTime? parsedDate = DateTime.tryParse(
+            forecastEntry['time']?.toString() ?? '',
+          );
+          if (parsedDate == null) {
+            continue;
+          }
+
+          final int conditionCode = _readInt(data, const ['cond']);
+          final double rainVolume = _readDouble(data, const ['rain']);
+          final double windSpeedMs = _readDouble(data, const ['ws10m']);
+
+          parsedForecasts.add(
+            WeatherForecastDay(
+              date: parsedDate,
+              tempMin: _readDouble(data, const ['tc_min', 'tc']),
+              tempMax: _readDouble(data, const ['tc_max', 'tc']),
+              humidity: _readDouble(data, const ['rh']),
+              condition: _mapTmdCondition(conditionCode),
+              description: _mapTmdDescription(conditionCode, rainVolume),
+              windSpeed: double.parse((windSpeedMs * 3.6).toStringAsFixed(1)),
+              rainChance: _estimateTmdRainChance(conditionCode, rainVolume),
+            ),
+          );
+        }
+
+        if (parsedForecasts.isNotEmpty) {
+          return parsedForecasts;
+        }
+      } catch (e) {
+        print('Error fetching TMD forecast for $place: $e. Trying next...');
+      }
+    }
+
+    return null;
   }
 
   // Fetch forecast from Open-Meteo using cascading geocoding to resolve coordinates
@@ -276,6 +429,9 @@ class WeatherService {
                     ),
                   );
                 }
+                print(
+                  '[Forecast] source=Open-Meteo status=resolved location=$locationName days=${list.length}',
+                );
                 return list;
               }
             }
@@ -322,6 +478,140 @@ class WeatherService {
     }
   }
 
+  List<dynamic> _extractTmdForecastLocations(Map<String, dynamic> decoded) {
+    final dynamic lowerCaseRoot = decoded['weather_forecast'];
+    if (lowerCaseRoot is Map<String, dynamic>) {
+      final dynamic locations = lowerCaseRoot['locations'];
+      if (locations is List<dynamic>) {
+        return locations;
+      }
+    }
+
+    final dynamic upperCaseRoot = decoded['WeatherForecasts'];
+    if (upperCaseRoot is List<dynamic>) {
+      return upperCaseRoot;
+    }
+    if (upperCaseRoot is Map<String, dynamic>) {
+      final dynamic locations = upperCaseRoot['locations'];
+      if (locations is List<dynamic>) {
+        return locations;
+      }
+    }
+
+    final dynamic singularRoot = decoded['WeatherForecast'];
+    if (singularRoot is Map<String, dynamic>) {
+      final dynamic locations = singularRoot['locations'];
+      if (locations is List<dynamic>) {
+        return locations;
+      }
+      return [singularRoot];
+    }
+
+    return const [];
+  }
+
+  String _buildLocationLabel({
+    required String province,
+    String? district,
+    String? subdistrict,
+  }) {
+    final List<String> parts = [
+      if (subdistrict != null && subdistrict.isNotEmpty) subdistrict,
+      if (district != null && district.isNotEmpty) district,
+      province,
+    ];
+    return parts.join(' / ');
+  }
+
+  double _readDouble(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final dynamic value = data[key];
+      if (value is num) {
+        return value.toDouble();
+      }
+      if (value is String) {
+        final parsed = double.tryParse(value);
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return 0.0;
+  }
+
+  int _readInt(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final dynamic value = data[key];
+      if (value is num) {
+        return value.toInt();
+      }
+      if (value is String) {
+        final parsed = int.tryParse(value);
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return 0;
+  }
+
+  String _mapTmdCondition(int code) {
+    switch (code) {
+      case 1:
+        return 'Sunny';
+      case 2:
+      case 3:
+      case 4:
+        return 'Cloudy';
+      case 5:
+      case 6:
+      case 7:
+        return 'Rainy';
+      case 8:
+        return 'Thunderstorm';
+      default:
+        return 'Cloudy';
+    }
+  }
+
+  String _mapTmdDescription(int code, double rainVolume) {
+    switch (code) {
+      case 1:
+        return 'ท้องฟ้าแจ่มใส';
+      case 2:
+        return 'มีเมฆบางส่วน';
+      case 3:
+        return 'เมฆเป็นส่วนมาก';
+      case 4:
+        return 'มีเมฆมาก';
+      case 5:
+        return 'มีฝนเล็กน้อย';
+      case 6:
+        return 'มีฝนปานกลาง';
+      case 7:
+        return 'มีฝนตกหนัก';
+      case 8:
+        return 'มีฝนฟ้าคะนอง';
+      default:
+        if (rainVolume > 0) {
+          return 'มีโอกาสเกิดฝน';
+        }
+        return 'มีเมฆบางส่วน';
+    }
+  }
+
+  int _estimateTmdRainChance(int code, double rainVolume) {
+    if (code == 8) return 95;
+    if (code == 7 || rainVolume >= 20) return 90;
+    if (code == 6 || rainVolume >= 10) return 75;
+    if (code == 5 || rainVolume > 0) return 60;
+    if (code == 4) return 40;
+    if (code == 3) return 30;
+    if (code == 2) return 15;
+    if (code == 1) return 5;
+    return 20;
+  }
+
   String _mapWmoCodeToCondition(int code) {
     if (code == 0) return 'Sunny';
     if (code >= 1 && code <= 3) return 'Cloudy';
@@ -339,8 +629,9 @@ class WeatherService {
     if (code >= 51 && code <= 55) return 'มีฝนตกปรอยๆ';
     if (code >= 61 && code <= 65) return 'มีฝนตกฟ้าคะนองเป็นแห่งๆ';
     if (code >= 80 && code <= 82) return 'มีฝนตกฟ้าคะนองเป็นแห่งๆ';
-    if (code >= 95 && code <= 99)
+    if (code >= 95 && code <= 99) {
       return 'มีฝนฟ้าคะนองกระจายและมีฝนตกหนักบางแห่ง';
+    }
     return 'มีเมฆบางส่วน';
   }
 

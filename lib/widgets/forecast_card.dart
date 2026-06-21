@@ -24,6 +24,7 @@ class _ForecastCardState extends State<ForecastCard> {
   String? _selectedSubdistrict;
 
   List<WeatherForecastDay> _forecast = [];
+  String _forecastSource = 'Unknown';
   bool _isLoading = false;
 
   @override
@@ -180,6 +181,7 @@ class _ForecastCardState extends State<ForecastCard> {
 
     setState(() {
       _isLoading = true;
+      _forecastSource = 'Loading...';
     });
 
     try {
@@ -228,11 +230,13 @@ class _ForecastCardState extends State<ForecastCard> {
 
       setState(() {
         _forecast = forecastData;
+        _forecastSource = WeatherService.instance.lastForecastSource;
         _isLoading = false;
       });
     } catch (e) {
       print('Error fetching forecast in widget: $e');
       setState(() {
+        _forecastSource = 'Unavailable';
         _isLoading = false;
       });
     }
@@ -303,6 +307,24 @@ class _ForecastCardState extends State<ForecastCard> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.2),
+                ),
+              ),
+              child: Text(
+                'Source: $_forecastSource',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
             ),
             const SizedBox(height: 16),
 
