@@ -288,51 +288,63 @@ class _DashboardViewState extends State<DashboardView> {
                   ),
                   const SizedBox(height: 8),
                   // 1. Live Gauges Grid
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1.0,
-                    children: [
-                      GaugeCard(
-                        title: 'อุณหภูมิอากาศ',
-                        value: telemetry.airTemp,
-                        min: 0,
-                        max: 50,
-                        unit: '°C',
-                        color: Colors.orange[700]!,
-                        icon: Icons.thermostat_outlined,
-                      ),
-                      GaugeCard(
-                        title: 'ความชื้นอากาศ',
-                        value: telemetry.airHumi,
-                        min: 0,
-                        max: 100,
-                        unit: '%',
-                        color: Colors.blue[600]!,
-                        icon: Icons.cloudy_snowing,
-                      ),
-                      GaugeCard(
-                        title: 'อุณหภูมิดิน',
-                        value: telemetry.soilTemp,
-                        min: 0,
-                        max: 50,
-                        unit: '°C',
-                        color: Colors.brown[600]!,
-                        icon: Icons.landslide_outlined,
-                      ),
-                      GaugeCard(
-                        title: 'ความชื้นในดิน',
-                        value: telemetry.soilHumi,
-                        min: 0,
-                        max: 100,
-                        unit: '%',
-                        color: Colors.teal[600]!,
-                        icon: Icons.grass_outlined,
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final double width = constraints.maxWidth;
+                      final int crossAxisCount = width >= 1000
+                          ? 4
+                          : width >= 700
+                          ? 3
+                          : 2;
+                      final double childAspectRatio = width >= 700 ? 1.1 : 1.0;
+
+                      return GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: crossAxisCount,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: childAspectRatio,
+                        children: [
+                          GaugeCard(
+                            title: 'อุณหภูมิอากาศ',
+                            value: telemetry.airTemp,
+                            min: 0,
+                            max: 50,
+                            unit: '°C',
+                            color: Colors.orange[700]!,
+                            icon: Icons.thermostat_outlined,
+                          ),
+                          GaugeCard(
+                            title: 'ความชื้นอากาศ',
+                            value: telemetry.airHumi,
+                            min: 0,
+                            max: 100,
+                            unit: '%',
+                            color: Colors.blue[600]!,
+                            icon: Icons.cloudy_snowing,
+                          ),
+                          GaugeCard(
+                            title: 'อุณหภูมิดิน',
+                            value: telemetry.soilTemp,
+                            min: 0,
+                            max: 50,
+                            unit: '°C',
+                            color: Colors.brown[600]!,
+                            icon: Icons.landslide_outlined,
+                          ),
+                          GaugeCard(
+                            title: 'ความชื้นในดิน',
+                            value: telemetry.soilHumi,
+                            min: 0,
+                            max: 100,
+                            unit: '%',
+                            color: Colors.teal[600]!,
+                            icon: Icons.grass_outlined,
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 14),

@@ -13,7 +13,8 @@ class HistoryView extends StatefulWidget {
   State<HistoryView> createState() => _HistoryViewState();
 }
 
-class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStateMixin {
+class _HistoryViewState extends State<HistoryView>
+    with SingleTickerProviderStateMixin {
   String _selectedPreset = '24h'; // Default preset: 24 hours
   List<SensorTelemetry> _history = [];
   bool _isLoading = false;
@@ -25,7 +26,7 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     unawaited(_loadHistory());
-    
+
     // Auto-refresh when new telemetry is received
     _telemetrySubscription = MqttService.instance.telemetryStream.listen((_) {
       if (mounted) {
@@ -53,8 +54,10 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
     try {
       // Seed data if empty just to show a gorgeous chart first
       await DatabaseService.instance.seedMockDataIfEmpty();
-      final records = await DatabaseService.instance.getHistoryForPreset(_selectedPreset);
-      
+      final records = await DatabaseService.instance.getHistoryForPreset(
+        _selectedPreset,
+      );
+
       setState(() {
         _history = records;
         _isLoading = false;
@@ -72,7 +75,9 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ยืนยันการลบประวัติ?'),
-        content: const Text('คุณต้องการลบข้อมูลประวัติการวัดทั้งหมดออกจากเครื่องหรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้'),
+        content: const Text(
+          'คุณต้องการลบข้อมูลประวัติการวัดทั้งหมดออกจากเครื่องหรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -102,6 +107,10 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final media = MediaQuery.of(context);
+    final isLandscape = media.orientation == Orientation.landscape;
+    final double chartHeight = isLandscape ? 300 : 260;
+    final double feedHeight = isLandscape ? 300 : 240;
 
     return Scaffold(
       appBar: AppBar(
@@ -112,148 +121,202 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
         actions: [
           IconButton(
             tooltip: 'ล้างข้อมูลประวัติ',
-            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
+            icon: const Icon(
+              Icons.delete_sweep_outlined,
+              color: Colors.redAccent,
+            ),
             onPressed: _clearHistory,
           ),
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Timeframe Selector Buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: [
-                  Expanded(child: _buildPresetButton('1h', '1 ชั่วโมงล่าสุด')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildPresetButton('24h', '24 ชั่วโมงล่าสุด')),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildPresetButton('7d', '7 วันล่าสุด')),
-                ],
-              ),
-            ),
-
-            // Tab Bar for Trends
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey[900] : Colors.grey[100],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: theme.colorScheme.primary,
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Timeframe Selector Buttons
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
                 ),
-                labelColor: Colors.white,
-                unselectedLabelColor: isDark ? Colors.grey[400] : Colors.grey[600],
-                tabs: const [
-                  Tab(text: 'อากาศ (Air)'),
-                  Tab(text: 'ดิน (Soil)'),
-                  Tab(text: 'ดัชนี VPD'),
-                ],
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildPresetButton('1h', '1 ชั่วโมงล่าสุด'),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildPresetButton('24h', '24 ชั่วโมงล่าสุด'),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: _buildPresetButton('7d', '7 วันล่าสุด')),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 16),
+              // Tab Bar for Trends
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[900] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  indicator: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: theme.colorScheme.primary,
+                  ),
+                  labelColor: Colors.white,
+                  unselectedLabelColor: isDark
+                      ? Colors.grey[400]
+                      : Colors.grey[600],
+                  tabs: const [
+                    Tab(text: 'อากาศ (Air)'),
+                    Tab(text: 'ดิน (Soil)'),
+                    Tab(text: 'ดัชนี VPD'),
+                  ],
+                ),
+              ),
 
-            // Charts Area
-            Expanded(
-              flex: 3,
-              child: Padding(
+              const SizedBox(height: 16),
+
+              // Charts Area
+              SizedBox(
+                height: chartHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _history.isEmpty
+                      ? const Center(
+                          child: Text('ไม่มีข้อมูลประวัติในช่วงเวลานี้'),
+                        )
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _buildLineChart(
+                              isAir: true,
+                              title: 'อุณหภูมิและความชื้นสัมพัทธ์ในอากาศ',
+                            ),
+                            _buildLineChart(
+                              isAir: false,
+                              title: 'อุณหภูมิและความชื้นในดิน',
+                            ),
+                            _buildVpdChart(),
+                          ],
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // Data Log Table Title
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _history.isEmpty
-                        ? const Center(child: Text('ไม่มีข้อมูลประวัติในช่วงเวลานี้'))
-                        : TabBarView(
-                            controller: _tabController,
-                            children: [
-                              _buildLineChart(isAir: true, title: 'อุณหภูมิและความชื้นสัมพัทธ์ในอากาศ'),
-                              _buildLineChart(isAir: false, title: 'อุณหภูมิและความชื้นในดิน'),
-                              _buildVpdChart(),
-                            ],
-                          ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'บันทึกข้อมูลการวัดทั้งหมด (${_history.length})',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _loadHistory,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text(
+                        'รีเฟรช',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 12),
-
-            // Data Log Table Title
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'บันทึกข้อมูลการวัดทั้งหมด (${_history.length})',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+              // Data Log Table List
+              SizedBox(
+                height: feedHeight,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[900] : Colors.grey[50],
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
                     ),
                   ),
-                  TextButton.icon(
-                    onPressed: _loadHistory,
-                    icon: const Icon(Icons.refresh, size: 16),
-                    label: const Text('รีเฟรช', style: TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-            ),
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _history.isEmpty
+                      ? const Center(child: Text('ไม่มีบันทึกข้อมูล'))
+                      : ListView.separated(
+                          itemCount: _history.length,
+                          separatorBuilder: (context, index) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            // Show newest records first in the table list
+                            final record =
+                                _history[_history.length - 1 - index];
+                            final timeStr = DateFormat(
+                              'dd/MM HH:mm',
+                            ).format(record.timestamp);
 
-            // Data Log Table List
-            Expanded(
-              flex: 2,
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.grey[900] : Colors.grey[50],
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[200]!),
-                ),
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _history.isEmpty
-                        ? const Center(child: Text('ไม่มีบันทึกข้อมูล'))
-                        : ListView.separated(
-                            itemCount: _history.length,
-                            separatorBuilder: (context, index) => const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              // Show newest records first in the table list
-                              final record = _history[_history.length - 1 - index];
-                              final timeStr = DateFormat('dd/MM HH:mm').format(record.timestamp);
-
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.access_time, size: 14, color: isDark ? Colors.grey[500] : Colors.grey[600]),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      timeStr,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark ? Colors.grey[300] : Colors.grey[800],
-                                      ),
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time,
+                                    size: 14,
+                                    color: isDark
+                                        ? Colors.grey[500]
+                                        : Colors.grey[600],
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.grey[300]
+                                          : Colors.grey[800],
                                     ),
-                                    const Spacer(),
-                                    _buildLogTag('อากาศ', '${record.airTemp.toStringAsFixed(1)}°/${record.airHumi.toStringAsFixed(0)}%', Colors.orange),
-                                    const SizedBox(width: 8),
-                                    _buildLogTag('ดิน', '${record.soilTemp.toStringAsFixed(1)}°/${record.soilHumi.toStringAsFixed(0)}%', Colors.teal),
-                                    const SizedBox(width: 8),
-                                    _buildLogTag('VPD', record.vpd.toStringAsFixed(1), Colors.green),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                                  ),
+                                  const Spacer(),
+                                  _buildLogTag(
+                                    'อากาศ',
+                                    '${record.airTemp.toStringAsFixed(1)}°/${record.airHumi.toStringAsFixed(0)}%',
+                                    Colors.orange,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildLogTag(
+                                    'ดิน',
+                                    '${record.soilTemp.toStringAsFixed(1)}°/${record.soilHumi.toStringAsFixed(0)}%',
+                                    Colors.teal,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildLogTag(
+                                    'VPD',
+                                    record.vpd.toStringAsFixed(1),
+                                    Colors.green,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -266,9 +329,14 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
             onPressed: () {},
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
           )
         : OutlinedButton(
             onPressed: () {
@@ -279,9 +347,14 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
             },
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
             ),
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
           );
   }
 
@@ -289,8 +362,22 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
-        Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            color: Colors.grey,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     );
   }
@@ -325,7 +412,10 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
               children: [
                 _buildIndicatorDot(Colors.orange, 'อุณหภูมิ (°C)'),
                 const SizedBox(width: 24),
-                _buildIndicatorDot(isAir ? Colors.blue : Colors.teal, 'ความชื้น (%)'),
+                _buildIndicatorDot(
+                  isAir ? Colors.blue : Colors.teal,
+                  'ความชื้น (%)',
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -333,7 +423,8 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
               child: LineChart(
                 LineChartData(
                   minY: 0,
-                  maxY: 100, // standard range covering both temperature and humidity
+                  maxY:
+                      100, // standard range covering both temperature and humidity
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
@@ -345,9 +436,15 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
                   borderData: FlBorderData(show: false),
                   titlesData: FlTitlesData(
                     show: true,
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
@@ -357,7 +454,9 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
                           return Text(
                             value.toStringAsFixed(0),
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: isDark ? Colors.grey[600] : Colors.grey[500],
+                              color: isDark
+                                  ? Colors.grey[600]
+                                  : Colors.grey[500],
                               fontSize: 10,
                             ),
                           );
@@ -437,9 +536,15 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
                   borderData: FlBorderData(show: false),
                   titlesData: FlTitlesData(
                     show: true,
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                     leftTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
@@ -448,7 +553,9 @@ class _HistoryViewState extends State<HistoryView> with SingleTickerProviderStat
                           return Text(
                             value.toStringAsFixed(1),
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: isDark ? Colors.grey[600] : Colors.grey[500],
+                              color: isDark
+                                  ? Colors.grey[600]
+                                  : Colors.grey[500],
                               fontSize: 10,
                             ),
                           );
