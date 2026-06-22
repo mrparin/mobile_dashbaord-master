@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/telemetry_model.dart';
 
@@ -49,11 +50,8 @@ class AirEnvironmentCard extends StatelessWidget {
                   unit: 'm/s',
                   color: Colors.blue[600]!,
                 ),
-                _EnvironmentTile(
-                  icon: Icons.explore_outlined,
-                  label: 'ทิศทางลม',
-                  value: telemetry.windDir.toStringAsFixed(0),
-                  unit: '°',
+                _WindDirectionTile(
+                  degrees: telemetry.windDir,
                   color: Colors.teal[600]!,
                 ),
                 _EnvironmentTile(
@@ -265,4 +263,242 @@ class _EnvironmentTile extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Wind Direction Compass Tile ────────────────────────────────────────────
+
+class _WindDirectionTile extends StatelessWidget {
+  final double degrees;
+  final Color color;
+
+  const _WindDirectionTile({
+    required this.degrees,
+    required this.color,
+  });
+
+  /// Converts degrees to 8-point compass label (English abbreviation)
+  String _directionLabel(double deg) {
+    final d = ((deg % 360) + 360) % 360;
+    const labels = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    final index = ((d + 22.5) / 45).floor() % 8;
+    return labels[index];
+  }
+
+  /// Converts degrees to 8-point compass label (Thai)
+  String _directionLabelThai(double deg) {
+    final d = ((deg % 360) + 360) % 360;
+    const labels = ['เหนือ', 'ตอ.น.', 'ตะวันออก', 'ตอ.ต.', 'ใต้', 'ตต.ต.', 'ตะวันตก', 'ตต.น.'];
+    final index = ((d + 22.5) / 45).floor() % 8;
+    return labels[index];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final dir = _directionLabel(degrees);
+    final dirThai = _directionLabelThai(degrees);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[850] : Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Compact compass dial (36x36 to fit within tile height)
+          SizedBox(
+            width: 36,
+            height: 36,
+            child: CustomPaint(
+              painter: _WindCompassPainter(
+                degrees: degrees,
+                color: color,
+                isDark: isDark,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'ทิศทางลม',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                const SizedBox(height: 2),
+                // Direction label + degrees + Thai name — all in one compact row
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: dir,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: color,
+                          fontSize: 13,
+                        ),
+                      ),
+                      TextSpan(
+                        text: '  ${degrees.toStringAsFixed(0)}°',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.grey[500] : Colors.grey[500],
+                          fontWeight: FontWeight.bold,
+                          fontSize: 9,
+                        ),
+                      ),
+                      TextSpan(
+                        text: '  $dirThai',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark ? Colors.grey[500] : Colors.grey[600],
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Compass CustomPainter ───────────────────────────────────────────────────
+
+class _WindCompassPainter extends CustomPainter {
+  final double degrees;
+  final Color color;
+  final bool isDark;
+
+  _WindCompassPainter({
+    required this.degrees,
+    required this.color,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // ── Background circle ──
+    final bgPaint = Paint()
+      ..color = (isDark ? Colors.grey[800]! : Colors.grey[200]!)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, bgPaint);
+
+    // ── Border ring ──
+    final borderPaint = Paint()
+      ..color = color.withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, radius - 1, borderPaint);
+
+    // ── Tick marks (8-point) ──
+    for (int i = 0; i < 8; i++) {
+      final angle = (i * 45) * math.pi / 180;
+      final isCardinal = i % 2 == 0; // N, E, S, W
+      final outer = radius - 1.5;
+      final inner = isCardinal ? radius - 6.0 : radius - 4.0;
+      final tickPaint = Paint()
+        ..color = isCardinal ? color.withOpacity(0.7) : (isDark ? Colors.grey[500]! : Colors.grey[400]!)
+        ..strokeWidth = isCardinal ? 1.5 : 1.0
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+        center + Offset(math.sin(angle) * inner, -math.cos(angle) * inner),
+        center + Offset(math.sin(angle) * outer, -math.cos(angle) * outer),
+        tickPaint,
+      );
+    }
+
+    // ── 'N' label ──
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: 'N',
+        style: TextStyle(
+          color: color,
+          fontSize: radius * 0.28,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      center + Offset(-textPainter.width / 2, -radius * 0.62),
+    );
+
+    // ── Arrow needle ──
+    final angleRad = degrees * math.pi / 180;
+    final needleLen = radius * 0.58;
+    final tailLen = radius * 0.28;
+
+    // Head (colored)
+    final needlePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    final headEnd = center +
+        Offset(math.sin(angleRad) * needleLen, -math.cos(angleRad) * needleLen);
+    canvas.drawLine(center, headEnd, needlePaint);
+
+    // Tail (muted)
+    final tailPaint = Paint()
+      ..color = (isDark ? Colors.grey[500]! : Colors.grey[400]!)
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round;
+    final tailEnd = center +
+        Offset(-math.sin(angleRad) * tailLen, math.cos(angleRad) * tailLen);
+    canvas.drawLine(center, tailEnd, tailPaint);
+
+    // Arrowhead triangle at needle tip
+    final arrowSize = radius * 0.18;
+    final arrowLeft = headEnd +
+        Offset(
+          math.sin(angleRad - math.pi * 0.45) * arrowSize,
+          -math.cos(angleRad - math.pi * 0.45) * arrowSize,
+        );
+    final arrowRight = headEnd +
+        Offset(
+          math.sin(angleRad + math.pi * 0.45) * arrowSize,
+          -math.cos(angleRad + math.pi * 0.45) * arrowSize,
+        );
+    final arrowPath = Path()
+      ..moveTo(headEnd.dx, headEnd.dy)
+      ..lineTo(arrowLeft.dx, arrowLeft.dy)
+      ..lineTo(arrowRight.dx, arrowRight.dy)
+      ..close();
+    canvas.drawPath(arrowPath, Paint()..color = color);
+
+    // ── Center dot ──
+    canvas.drawCircle(
+      center,
+      radius * 0.1,
+      Paint()..color = isDark ? Colors.grey[300]! : Colors.grey[700]!,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_WindCompassPainter old) =>
+      old.degrees != degrees || old.color != color || old.isDark != isDark;
 }
