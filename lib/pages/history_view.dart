@@ -384,109 +384,291 @@ class _HistoryViewState extends State<HistoryView>
 
   // Dual Line Chart Widget
   Widget _buildLineChart({required bool isAir, required String title}) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final List<FlSpot> tempSpots = [];
     final List<FlSpot> humiSpots = [];
 
     for (int i = 0; i < _history.length; i++) {
-      final double x = i.toDouble();
+      final double x =
+          _history[i].timestamp.millisecondsSinceEpoch / 1000.0;
       final double temp = isAir ? _history[i].airTemp : _history[i].soilTemp;
       final double humi = isAir ? _history[i].airHumi : _history[i].soilHumi;
-
       tempSpots.add(FlSpot(x, temp));
       humiSpots.add(FlSpot(x, humi));
     }
+
+    final legend = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildIndicatorDot(Colors.orange, 'อุณหภูมิ (°C)'),
+        const SizedBox(width: 24),
+        _buildIndicatorDot(
+          isAir ? Colors.blue : Colors.teal,
+          'ความชื้น (%)',
+        ),
+      ],
+    );
+
+    return _buildScrollableChart(
+      isDark: isDark,
+      legend: legend,
+      minY: 0,
+      maxY: 100,
+      yInterval: 20,
+      yLabelFn: (v) => v.toStringAsFixed(0),
+      lineBars: [
+        LineChartBarData(
+          spots: tempSpots,
+          isCurved: true,
+          color: Colors.orange,
+          barWidth: 3,
+          isStrokeCapRound: true,
+          dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(show: false),
+        ),
+        LineChartBarData(
+          spots: humiSpots,
+          isCurved: true,
+          color: isAir ? Colors.blue : Colors.teal,
+          barWidth: 3,
+          isStrokeCapRound: true,
+          dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(show: false),
+        ),
+      ],
+    );
+  }
+
+  // VPD Line Chart Widget
+  Widget _buildVpdChart() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final List<FlSpot> spots = [];
+    double maxVpd = 2.0;
+
+    for (int i = 0; i < _history.length; i++) {
+      final double x =
+          _history[i].timestamp.millisecondsSinceEpoch / 1000.0;
+      final double vpd = _history[i].vpd;
+      spots.add(FlSpot(x, vpd));
+      if (vpd > maxVpd) maxVpd = vpd;
+    }
+
+    final legend =
+        _buildIndicatorDot(Colors.green, 'แรงดันไอที่แตกต่าง VPD (kPa)');
+
+    return _buildScrollableChart(
+      isDark: isDark,
+      legend: legend,
+      minY: 0,
+      maxY: maxVpd + 0.5,
+      yLabelFn: (v) => v.toStringAsFixed(1),
+      lineBars: [
+        LineChartBarData(
+          spots: spots,
+          isCurved: true,
+          color: Colors.green,
+          barWidth: 3,
+          isStrokeCapRound: true,
+          dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(
+            show: true,
+            color: Colors.green.withOpacity(0.1),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scrollable chart scaffold
+  // Pins the Y-axis on the left and allows horizontal pan on chart + X labels
+  // ---------------------------------------------------------------------------
+  Widget _buildScrollableChart({
+    required bool isDark,
+    required Widget legend,
+    required double minY,
+    required double maxY,
+    double? yInterval,
+    required String Function(double) yLabelFn,
+    required List<LineChartBarData> lineBars,
+  }) {
+    final theme = Theme.of(context);
+    final xInterval = _getXInterval();
+    final timeFormat = _getTimeFormat();
+    final chartWidth = _getScrollableChartWidth();
+    final bottomReservedSize = _getBottomReservedSize();
+
+    // Compute actual min/max X from spots so the chart fills correctly
+    double? minX, maxX;
+    for (final bar in lineBars) {
+      for (final spot in bar.spots) {
+        minX = minX == null ? spot.x : (spot.x < minX ? spot.x : minX);
+        maxX = maxX == null ? spot.x : (spot.x > maxX ? spot.x : maxX);
+      }
+    }
+
+    // Fixed Y-axis width (matches left reserved size below)
+    const double yAxisWidth = 34.0;
+
+    final scrollController = ScrollController();
 
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       color: isDark ? Colors.grey[900] : Colors.white,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 16, 20, 10),
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
         child: Column(
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildIndicatorDot(Colors.orange, 'อุณหภูมิ (°C)'),
-                const SizedBox(width: 24),
-                _buildIndicatorDot(
-                  isAir ? Colors.blue : Colors.teal,
-                  'ความชื้น (%)',
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            // Legend
+            legend,
+            const SizedBox(height: 12),
+            // Chart row: pinned Y-axis | scrollable chart area
             Expanded(
-              child: LineChart(
-                LineChartData(
-                  minY: 0,
-                  maxY:
-                      100, // standard range covering both temperature and humidity
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-                      strokeWidth: 1,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        interval: 20,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            value.toStringAsFixed(0),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: isDark
-                                  ? Colors.grey[600]
-                                  : Colors.grey[500],
-                              fontSize: 10,
+              child: Row(
+                children: [
+                  // ── Pinned Y-axis ──────────────────────────────────────────
+                  SizedBox(
+                    width: yAxisWidth,
+                    child: LineChart(
+                      LineChartData(
+                        minY: minY,
+                        maxY: maxY,
+                        minX: minX,
+                        maxX: maxX,
+                        gridData: const FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        lineBarsData: lineBars
+                            .map(
+                              (b) => LineChartBarData(
+                                spots: b.spots,
+                                color: Colors.transparent,
+                                barWidth: 0,
+                                dotData: const FlDotData(show: false),
+                              ),
+                            )
+                            .toList(),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: yAxisWidth,
+                              interval: yInterval,
+                              getTitlesWidget: (value, meta) => Text(
+                                yLabelFn(value),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: isDark
+                                      ? Colors.grey[500]
+                                      : Colors.grey[600],
+                                  fontSize: 10,
+                                ),
+                              ),
                             ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  lineBarsData: [
-                    // Temperature Line
-                    LineChartBarData(
-                      spots: tempSpots,
-                      isCurved: true,
-                      color: Colors.orange,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(show: false),
+                  // ── Scrollable chart + X labels ────────────────────────────
+                  Expanded(
+                    child: Scrollbar(
+                      controller: scrollController,
+                      thumbVisibility: true,
+                      thickness: 4,
+                      radius: const Radius.circular(4),
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        scrollDirection: Axis.horizontal,
+                        padding: EdgeInsets.only(
+                          bottom: bottomReservedSize > 30 ? 10 : 6,
+                        ),
+                        child: SizedBox(
+                          width: chartWidth,
+                          child: LineChart(
+                            LineChartData(
+                              minY: minY,
+                              maxY: maxY,
+                              minX: minX,
+                              maxX: maxX,
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: true,
+                                verticalInterval: xInterval,
+                                getDrawingVerticalLine: (value) => FlLine(
+                                  color: isDark
+                                      ? Colors.grey[800]!
+                                      : Colors.grey[200]!,
+                                  strokeWidth: 0.8,
+                                  dashArray: [4, 4],
+                                ),
+                                getDrawingHorizontalLine: (value) => FlLine(
+                                  color: isDark
+                                      ? Colors.grey[800]!
+                                      : Colors.grey[200]!,
+                                  strokeWidth: 1,
+                                ),
+                              ),
+                              borderData: FlBorderData(show: false),
+                              titlesData: FlTitlesData(
+                                show: true,
+                                topTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                rightTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                leftTitles: const AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: bottomReservedSize,
+                                    interval: xInterval,
+                                    getTitlesWidget: (value, meta) {
+                                      final dt =
+                                          DateTime.fromMillisecondsSinceEpoch(
+                                        (value * 1000).toInt(),
+                                      );
+                                      return SideTitleWidget(
+                                        axisSide: meta.axisSide,
+                                        child: Text(
+                                          DateFormat(timeFormat).format(dt),
+                                          textAlign: TextAlign.center,
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                            color: isDark
+                                                ? Colors.grey[400]
+                                                : Colors.grey[700],
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              lineBarsData: lineBars,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                    // Humidity Line
-                    LineChartBarData(
-                      spots: humiSpots,
-                      isCurved: true,
-                      color: isAir ? Colors.blue : Colors.teal,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(show: false),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -495,95 +677,59 @@ class _HistoryViewState extends State<HistoryView>
     );
   }
 
-  // VPD Line Chart Widget
-  Widget _buildVpdChart() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final List<FlSpot> spots = [];
-    double maxVpd = 2.0;
-
-    for (int i = 0; i < _history.length; i++) {
-      final double x = i.toDouble();
-      final double vpd = _history[i].vpd;
-      spots.add(FlSpot(x, vpd));
-      if (vpd > maxVpd) maxVpd = vpd;
+  /// Calculates total chart canvas width so each time-tick gets enough space.
+  /// Each tick gets 56px minimum, giving clear readable labels.
+  double _getScrollableChartWidth() {
+    switch (_selectedPreset) {
+      case '1h':
+        // 6 ticks × 10 min = 60 min; give each 60px
+        return 6 * 60.0;
+      case '24h':
+        // 24 ticks × 1 h; give each 64px
+        return 24 * 64.0;
+      case '7d':
+        // 14 ticks × 12 h; give each 72px
+        return 14 * 72.0;
+      default:
+        return 800;
     }
+  }
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: isDark ? Colors.grey[900] : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 16, 20, 10),
-        child: Column(
-          children: [
-            _buildIndicatorDot(Colors.green, 'แรงดันไอที่แตกต่าง VPD (kPa)'),
-            const SizedBox(height: 16),
-            Expanded(
-              child: LineChart(
-                LineChartData(
-                  minY: 0,
-                  maxY: (maxVpd + 0.5),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
-                      strokeWidth: 1,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    bottomTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        getTitlesWidget: (value, meta) {
-                          return Text(
-                            value.toStringAsFixed(1),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: isDark
-                                  ? Colors.grey[600]
-                                  : Colors.grey[500],
-                              fontSize: 10,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      color: Colors.green,
-                      barWidth: 3,
-                      isStrokeCapRound: true,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        color: Colors.green.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  /// Returns the reserved height (px) for the bottom X-axis label row.
+  /// 7d uses a 2-line label (dd/MM + HH:mm) so needs more space.
+  double _getBottomReservedSize() {
+    return _selectedPreset == '7d' ? 44.0 : 28.0;
+  }
+
+  /// Returns X-axis interval in seconds based on the selected time preset.
+  /// - 1h  → every 10 minutes (600 seconds)
+  /// - 24h → every 1 hour   (3600 seconds)
+  /// - 7d  → every 12 hours (43200 seconds)
+  double _getXInterval() {
+    switch (_selectedPreset) {
+      case '1h':
+        return 600; // 10 minutes
+      case '24h':
+        return 3600; // 1 hour
+      case '7d':
+        return 43200; // 12 hours
+      default:
+        return 3600;
+    }
+  }
+
+  /// Returns DateFormat pattern matching the selected time preset.
+  String _getTimeFormat() {
+    switch (_selectedPreset) {
+      case '1h':
+        return 'HH:mm'; // e.g. 14:30
+      case '24h':
+        return 'HH:mm'; // e.g. 14:00
+      case '7d':
+        return 'dd/MM\nHH:mm'; // e.g. 23/06\n14:00
+      default:
+        return 'HH:mm';
+    }
   }
 
   Widget _buildIndicatorDot(Color color, String label) {
