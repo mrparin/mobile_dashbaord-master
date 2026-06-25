@@ -1,4 +1,4 @@
-package com.example.phanmanee
+package com.smiledevstudio.phanmanee
 
 import io.flutter.embedding.android.FlutterActivity
 
