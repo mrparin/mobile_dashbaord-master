@@ -231,172 +231,187 @@ class _DashboardViewState extends State<DashboardView> {
           ),
         ],
       ),
-      body: StreamBuilder<SensorTelemetry>(
-        stream: MqttService.instance.telemetryStream,
-        initialData: MqttService.instance.latestTelemetry,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('กำลังเชื่อมต่อเซิร์ฟเวอร์ MQTT...'),
-                ],
-              ),
-            );
-          }
-
-          final telemetry = snapshot.data;
-          if (telemetry == null) {
-            return const Center(child: Text('ไม่มีข้อมูลส่งมาจากอุปกรณ์'));
-          }
-
-          // Add reading to the local state history for scatter plots
-          _updateRecentHistory(telemetry);
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              MqttService.instance.disconnect();
-              await MqttService.instance.connect();
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Icon(
-                        Icons.sync,
-                        size: 14,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'อัปเดตล่าสุด: ${DateFormat('HH:mm:ss น.').format(telemetry.timestamp)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // 1. Live Gauges Grid
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final double width = constraints.maxWidth;
-                      final int crossAxisCount = width >= 1000
-                          ? 4
-                          : width >= 700
-                          ? 3
-                          : 2;
-                      final double childAspectRatio = width >= 700 ? 1.1 : 1.0;
-
-                      return GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: crossAxisCount,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        childAspectRatio: childAspectRatio,
+      body: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          // ── Telemetry section (rebuilt on every MQTT message) ──────────
+          SliverToBoxAdapter(
+            child: StreamBuilder<SensorTelemetry>(
+              stream: MqttService.instance.telemetryStream,
+              initialData: MqttService.instance.latestTelemetry,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          GaugeCard(
-                            title: 'อุณหภูมิอากาศ',
-                            value: telemetry.airTemp,
-                            min: 0,
-                            max: 50,
-                            unit: '°C',
-                            color: Colors.orange[700]!,
-                            icon: Icons.thermostat_outlined,
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('กำลังเชื่อมต่อเซิร์ฟเวอร์ MQTT...'),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final telemetry = snapshot.data;
+                if (telemetry == null) {
+                  return const SizedBox(
+                    height: 200,
+                    child: Center(child: Text('ไม่มีข้อมูลส่งมาจากอุปกรณ์')),
+                  );
+                }
+
+                // Add reading to the local state history for scatter plots
+                _updateRecentHistory(telemetry);
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Icon(
+                            Icons.sync,
+                            size: 14,
+                            color: theme.colorScheme.primary,
                           ),
-                          GaugeCard(
-                            title: 'ความชื้นอากาศ',
-                            value: telemetry.airHumi,
-                            min: 0,
-                            max: 100,
-                            unit: '%',
-                            color: Colors.blue[600]!,
-                            icon: Icons.cloudy_snowing,
-                          ),
-                          GaugeCard(
-                            title: 'อุณหภูมิดิน',
-                            value: telemetry.soilTemp,
-                            min: 0,
-                            max: 50,
-                            unit: '°C',
-                            color: Colors.brown[600]!,
-                            icon: Icons.landslide_outlined,
-                          ),
-                          GaugeCard(
-                            title: 'ความชื้นในดิน',
-                            value: telemetry.soilHumi,
-                            min: 0,
-                            max: 100,
-                            unit: '%',
-                            color: Colors.teal[600]!,
-                            icon: Icons.grass_outlined,
+                          const SizedBox(width: 4),
+                          Text(
+                            'อัปเดตล่าสุด: ${DateFormat('HH:mm:ss น.').format(telemetry.timestamp)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
-                      );
-                    },
+                      ),
+                      const SizedBox(height: 8),
+                      // 1. Live Gauges Grid
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final double width = constraints.maxWidth;
+                          final int crossAxisCount = width >= 1000
+                              ? 4
+                              : width >= 700
+                              ? 3
+                              : 2;
+                          final double childAspectRatio = width >= 700 ? 1.1 : 1.0;
+
+                          return GridView.count(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: crossAxisCount,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: childAspectRatio,
+                            children: [
+                              GaugeCard(
+                                title: 'อุณหภูมิอากาศ',
+                                value: telemetry.airTemp,
+                                min: 0,
+                                max: 50,
+                                unit: '°C',
+                                color: Colors.orange[700]!,
+                                icon: Icons.thermostat_outlined,
+                              ),
+                              GaugeCard(
+                                title: 'ความชื้นอากาศ',
+                                value: telemetry.airHumi,
+                                min: 0,
+                                max: 100,
+                                unit: '%',
+                                color: Colors.blue[600]!,
+                                icon: Icons.cloudy_snowing,
+                              ),
+                              GaugeCard(
+                                title: 'อุณหภูมิดิน',
+                                value: telemetry.soilTemp,
+                                min: 0,
+                                max: 50,
+                                unit: '°C',
+                                color: Colors.brown[600]!,
+                                icon: Icons.landslide_outlined,
+                              ),
+                              GaugeCard(
+                                title: 'ความชื้นในดิน',
+                                value: telemetry.soilHumi,
+                                min: 0,
+                                max: 100,
+                                unit: '%',
+                                color: Colors.teal[600]!,
+                                icon: Icons.grass_outlined,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 2. Vapor Pressure Deficit (VPD) Status Recommendation
+                      VpdStatusCard(vpdValue: telemetry.vpd),
+
+                      const SizedBox(height: 14),
+
+                      // Air and Soil environment details
+                      AirEnvironmentCard(telemetry: telemetry),
+
+                      const SizedBox(height: 14),
+
+                      SoilEnvironmentCard(telemetry: telemetry),
+
+                      const SizedBox(height: 14),
+
+                      // 4. Scatter Plot: Air Temp vs. Relative Humidity
+                      RelationshipChart(
+                        title: 'สถิติความสัมพันธ์: อากาศ',
+                        xLabel: 'อุณหภูมิอากาศ (°C)',
+                        yLabel: 'ความชื้นสัมพัทธ์ในอากาศ (%)',
+                        history: _recentHistory,
+                        isAir: true,
+                        dotColor: Colors.blue[600]!,
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // 5. Scatter Plot: Soil Temp vs. Soil Moisture
+                      RelationshipChart(
+                        title: 'สถิติความสัมพันธ์: ในดิน',
+                        xLabel: 'อุณหภูมิดิน (°C)',
+                        yLabel: 'ความชื้นในดิน (%)',
+                        history: _recentHistory,
+                        isAir: false,
+                        dotColor: Colors.teal[600]!,
+                      ),
+
+                      const SizedBox(height: 14),
+                    ],
                   ),
-
-                  const SizedBox(height: 14),
-
-                  // 2. Vapor Pressure Deficit (VPD) Status Recommendation
-                  VpdStatusCard(vpdValue: telemetry.vpd),
-
-                  const SizedBox(height: 14),
-
-                  // Air and Soil environment details
-                  AirEnvironmentCard(telemetry: telemetry),
-
-                  const SizedBox(height: 14),
-
-                  SoilEnvironmentCard(telemetry: telemetry),
-
-                  const SizedBox(height: 14),
-
-                  // 3. 7-Day Weather Forecast with dropdown filters
-                  const ForecastCard(),
-
-                  const SizedBox(height: 14),
-
-                  // 4. Scatter Plot: Air Temp vs. Relative Humidity
-                  RelationshipChart(
-                    title: 'สถิติความสัมพันธ์: อากาศ',
-                    xLabel: 'อุณหภูมิอากาศ (°C)',
-                    yLabel: 'ความชื้นสัมพัทธ์ในอากาศ (%)',
-                    history: _recentHistory,
-                    isAir: true,
-                    dotColor: Colors.blue[600]!,
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // 5. Scatter Plot: Soil Temp vs. Soil Moisture
-                  RelationshipChart(
-                    title: 'สถิติความสัมพันธ์: ในดิน',
-                    xLabel: 'อุณหภูมิดิน (°C)',
-                    yLabel: 'ความชื้นในดิน (%)',
-                    history: _recentHistory,
-                    isAir: false,
-                    dotColor: Colors.teal[600]!,
-                  ),
-
-                  const SizedBox(height: 24),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
+          ),
+
+          // ── ForecastCard: stable, NOT inside StreamBuilder ─────────────
+          // Placed outside StreamBuilder so MQTT rebuilds do NOT reset
+          // dropdown state while the user is selecting a location.
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: ForecastCard(),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        ],
       ),
     );
   }
 }
+

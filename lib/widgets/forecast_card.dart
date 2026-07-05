@@ -418,7 +418,14 @@ class _ForecastCardState extends State<ForecastCard> {
                       itemBuilder: (context, index) {
                         final day = _forecast[index];
                         final weatherColor = _getWeatherColor(day.condition);
-                        final isToday = index == 0;
+                        final now = DateTime.now();
+                        final today = DateTime(now.year, now.month, now.day);
+                        final dayDate = DateTime(
+                          day.date.year,
+                          day.date.month,
+                          day.date.day,
+                        );
+                        final isToday = dayDate == today;
                         final dayLabel = isToday
                             ? 'วันนี้'
                             : DateFormat('EEE d', 'th_TH').format(day.date);
@@ -525,7 +532,7 @@ class _ForecastCardState extends State<ForecastCard> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(
-                                    Icons.opacity,
+                                    Icons.invert_colors,
                                     size: 10,
                                     color: Colors.lightBlue[300],
                                   ),
